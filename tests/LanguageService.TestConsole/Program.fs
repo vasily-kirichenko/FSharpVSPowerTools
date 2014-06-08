@@ -6,6 +6,10 @@ open Microsoft.FSharp.Compiler.SourceCodeServices
 
 [<EntryPoint>]
 let main _argv = 
+    Environment.SetEnvironmentVariable("mFSharp_IncrementalTypeCheckCacheSize", "1")
+    Environment.SetEnvironmentVariable("mFSharp_ParseFileInProjectCacheSize", "1")
+    Environment.SetEnvironmentVariable("mFSharp_ProjectCacheSizeDefault", "1")
+
     let ls = LanguageService(fun _ -> ())    
     let inRoot relativePath = Path.Combine (@"l:\github\FSharpVSPowerTools\", relativePath)
     let coreOpts() = 
@@ -172,3 +176,4 @@ let main _argv =
         | _ -> printfn "Wrong input. Press <W> to run another iteration or <C> to clear FCS + GC."
 
     0
+    
