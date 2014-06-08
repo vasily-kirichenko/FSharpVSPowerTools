@@ -57,6 +57,8 @@ let main argv =
         sw.Stop()
         printfn "Got %d symbol uses in %O" uses.Length sw.Elapsed
 
+    Trace.Listeners.Add(new ConsoleTraceListener()) |> ignore
+
     while true do
         match Console.ReadKey().Key with
         | ConsoleKey.W -> work()
