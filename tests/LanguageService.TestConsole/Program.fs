@@ -11,7 +11,8 @@ let main _argv =
     Environment.SetEnvironmentVariable("mFSharp_ProjectCacheSizeDefault", "1")
 
     let ls = LanguageService(fun _ -> ())    
-    let inRoot relativePath = Path.Combine (@"l:\github\FSharpVSPowerTools\", relativePath)
+    //let inRoot relativePath = Path.Combine (@"l:\github\FSharpVSPowerTools\", relativePath)
+    let inRoot relativePath = Path.Combine (@"L:\git\VisualFSharpPowerTools", relativePath)
     let coreOpts() = 
         { ProjectFileName =
             inRoot @"src\FSharpVSPowerTools.Core\FSharpVSPowerTools.Core.fsproj"
