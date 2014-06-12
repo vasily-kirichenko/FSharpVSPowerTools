@@ -154,16 +154,22 @@ let main _argv =
           UnresolvedReferences = None }
 
     let logicFile = inRoot @"src\FSharpVSPowerTools.Logic\Library.fs"
+    let cancelToken = ref None
 
     let work opts file =
-        let sw = Stopwatch.StartNew()
-        let uses = 
-            ls.GetAllUsesOfAllSymbolsInFile (opts(), file, File.ReadAllText coreFile, AllowStaleResults.No)
-            |> Async.RunSynchronously
-        sw.Stop()
-        printfn "Got %d symbol uses in %O" uses.Length sw.Elapsed
-        GC.Collect()
-        GC.Collect()
+        !cancelToken |> Option.iter (fun (x: System.Threading.CancellationTokenSource) -> x.Dispose())
+        let token = new System.Threading.CancellationTokenSource()
+        cancelToken := Some token
+        let worker = 
+            async {
+                let sw = Stopwatch.StartNew()
+                let! uses = ls.GetAllUsesOfAllSymbolsInFile (opts(), file, File.ReadAllText coreFile, AllowStaleResults.No)
+                sw.Stop()
+                printfn "Got %d symbol uses in %O" uses.Length sw.Elapsed
+                GC.Collect()
+                GC.Collect()
+            }
+        Async.Start (worker, token.Token)
 
     Trace.Listeners.Add(new ConsoleTraceListener()) |> ignore
 
@@ -174,7 +180,14 @@ let main _argv =
             ls.Checker.ClearLanguageServiceRootCachesAndCollectAndFinalizeAllTransients()
             GC.Collect()
             GC.Collect()
-        | _ -> printfn "Wrong input. Press <W> to run another iteration or <C> to clear FCS + GC."
+        | ConsoleKey.S ->
+            !cancelToken |> Option.iter (fun x -> 
+                x.Cancel()
+                printfn "Token cancelled."
+                x.Dispose()
+                cancelToken := None)
+            cancelToken := None
+        | _ -> printfn "Wrong input. Press <W> to run another iteration, <C> to clear FCS + GC or <S> to cancel running iteration."
 
     0
     
