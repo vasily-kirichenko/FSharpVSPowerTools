@@ -354,7 +354,7 @@ module SourceCodeClassifier =
                                EndCol = decl.DeclarationRange.EndColumn }
                   Snapshot = None })
     
-        let printfSpecifiersRanges =        
+        let printfSpecifiersRanges =
             checkResults.GetFormatSpecifierLocations()
             |> Option.map (fun ranges ->
                  ranges |> Array.map (fun r -> 

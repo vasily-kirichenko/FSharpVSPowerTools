@@ -40,7 +40,7 @@ type LintTagger(textDocument: ITextDocument,
 
     let dte = serviceProvider.GetService<EnvDTE.DTE, SDTE>()
     let version = dte.Version |> VisualStudioVersion.fromDTEVersion |> VisualStudioVersion.toBestMatchFSharpVersion 
-                            
+                          
     let updateAtCaretPosition () =
         let uiContext = SynchronizationContext.Current
         let result = maybe {
