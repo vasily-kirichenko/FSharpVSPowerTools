@@ -167,7 +167,7 @@ type SyntaxConstructClassifier
 
     let updateUnusedDeclarations() = 
         let worker (project, snapshot) =
-            asyncMaybe {    
+            asyncMaybe {
                 let pf = Profiler()
                 debug "[SyntaxConstructClassifier] -> UpdateUnusedDeclarations"
                 
@@ -183,7 +183,7 @@ type SyntaxConstructClassifier
                     else async { return symbolsUses }
                     |> liftAsync 
 
-                let lexer = vsLanguageService.CreateLexer(snapshot, project.CompilerOptions)     
+                let lexer = vsLanguageService.CreateLexer(snapshot, project.CompilerOptions)
                 let getTextLineOneBased i = snapshot.GetLineFromLineNumber(i).GetText()
                 
                 let! checkResults = pf.Time "parseFileInProject" <| fun _ ->
@@ -323,7 +323,7 @@ type SyntaxConstructClassifier
                         FastStage.Data 
                             { Snapshot = snapshot
                               Spans = spans
-                              SingleSymbolsProjects = singleSymbolsProjects }) |> ignore  
+                              SingleSymbolsProjects = singleSymbolsProjects }) |> ignore
 
                     triggerClassificationChanged snapshot "UpdateSyntaxConstructClassifiers"
 
@@ -399,8 +399,8 @@ type SyntaxConstructClassifier
                         let origSnapshot = columnSpan.Snapshot |> Option.getOrElse snapshot
                         let! span = fromRange origSnapshot (columnSpan.WordSpan.ToRange())
                         let span = 
-                            if targetSnapshotSpan.Snapshot <> span.Snapshot then
-                                span.TranslateTo(targetSnapshotSpan.Snapshot, SpanTrackingMode.EdgeExclusive)  
+                            if targetSnapshotSpan.Snapshot <> origSnapshot then
+                                span.TranslateTo(targetSnapshotSpan.Snapshot, SpanTrackingMode.EdgeExclusive)
                             else span
                         // Translate the span to the new snapshot
                         return clType, span 
@@ -427,17 +427,24 @@ type SyntaxConstructClassifier
 
     interface ITagger<UnusedDeclarationTag> with
         member __.GetTags spans = 
-            let getTags (_spans: NormalizedSnapshotSpanCollection) = 
+            let currentSnapshot = spans |> Seq.tryHead |> Option.map (fun x -> x.Snapshot)
+
+            let getTags() = 
                 unusedDeclarationState.Value
                 |> Option.map (fun (snapshot, data) ->
-                    data
-                    |> Array.choose (fun wordSpan ->
-                        fromRange snapshot (wordSpan.ToRange())
-                        |> Option.map (fun span -> TagSpan(span, UnusedDeclarationTag()) :> ITagSpan<_>)))
-                |> Option.getOrElse [||]
-            protectOrDefault (fun _ -> getTags spans :> _) Seq.empty
+                    let spans = data |> Array.choose (fun wordSpan -> fromRange snapshot (wordSpan.ToRange()))
 
-        [<CLIEvent>]
+                    let spans =
+                        match currentSnapshot with
+                        | Some currentSnapshot when currentSnapshot <> snapshot ->
+                            spans |> Array.map (fun span -> span.TranslateTo (currentSnapshot, SpanTrackingMode.EdgeExclusive))
+                        | _ -> spans
+
+                    spans |> Array.map (fun span -> TagSpan(span, UnusedDeclarationTag()) :> ITagSpan<_>))
+                |> Option.getOrElse [||]
+            protectOrDefault (fun _ -> getTags() :> _) Seq.empty
+
+        [<CLIEvent>] 
         member __.TagsChanged = unusedDeclarationChanged.Publish
 
     interface IDisposable with
