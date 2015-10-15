@@ -89,9 +89,6 @@
     <Content Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.ConcurrencyVisualizer.Markers">
-      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\0ll4op5l.4yv\SDK\Managed\4.0\Microsoft.ConcurrencyVisualizer.Markers.dll</HintPath>
-    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <Private>False</Private>

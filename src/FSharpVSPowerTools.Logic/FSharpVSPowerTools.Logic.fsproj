@@ -263,9 +263,6 @@
     <Reference Include="FSharpLint.Rules">
       <HintPath>..\..\packages\FSharpLint.Core\lib\FSharpLint.Rules.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.ConcurrencyVisualizer.Markers">
-      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\0ll4op5l.4yv\SDK\Managed\4.0\Microsoft.ConcurrencyVisualizer.Markers.dll</HintPath>
-    </Reference>
     <Reference Include="Microsoft.VisualStudio.ComponentModelHost">
       <HintPath>..\..\lib\vs2012\Microsoft.VisualStudio.ComponentModelHost.dll</HintPath>
       <Private>False</Private>

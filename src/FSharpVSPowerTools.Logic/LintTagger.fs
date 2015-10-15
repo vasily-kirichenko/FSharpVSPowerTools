@@ -12,7 +12,7 @@ open FSharpVSPowerTools.ProjectSystem
 open FSharpLint.Application
 open FSharpLint.Framework.Configuration
 open Microsoft.FSharp.Compiler
-open Microsoft.ConcurrencyVisualizer.Instrumentation
+//open Microsoft.ConcurrencyVisualizer.Instrumentation
 
 type LintTag(tooltip) = 
     inherit ErrorTag(Constants.LintTagErrorType, tooltip)
@@ -57,7 +57,7 @@ type LintTagger(textDocument: ITextDocument,
             let config, shouldFileBeIgnored = lintData.Value
 
             if not shouldFileBeIgnored then
-                let m = Markers.EnterSpan "Lint"
+                //let m = Markers.EnterSpan "Lint"
                 let res = 
                     Lint.lintParsedFile
                         { Lint.OptionalLintParameters.Default with Configuration = Some config }
@@ -66,7 +66,7 @@ type LintTagger(textDocument: ITextDocument,
                           TypeCheckResults = None
                           FSharpVersion = version }
                         doc.FullName
-                m.Leave()
+                //m.Leave()
 
                 return
                     match res with

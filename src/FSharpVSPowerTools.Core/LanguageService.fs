@@ -155,7 +155,7 @@ type FileState =
     | BeingChecked
     | Cancelled
 
-open Microsoft.ConcurrencyVisualizer.Instrumentation
+//open Microsoft.ConcurrencyVisualizer.Instrumentation
 
 // --------------------------------------------------------------------------------------
 // Language service 
@@ -173,10 +173,10 @@ type LanguageService (?fileSystem: IFileSystem) =
   // when the background typechecker has "caught up" after some other file has been changed, 
   // and its time to re-typecheck the current file.
   let checkerInstance = FSharpChecker.Create (projectCacheSize = 50, keepAllBackgroundResolutions = false)
-  do checkerInstance.BeforeBackgroundFileCheck.Add (fun file -> Markers.WriteFlag("BeforeBackgroundFileCheck {0}", file))
-     checkerInstance.FileChecked.Add (fun file -> Markers.WriteFlag("FileChecked {0}", file))
-     checkerInstance.FileParsed.Add (fun file -> Markers.WriteFlag("FileParsed {0}", file))
-     checkerInstance.ProjectChecked.Add (fun p -> Markers.WriteFlag("ProjectChecked {0}", p))
+//  do checkerInstance.BeforeBackgroundFileCheck.Add (fun file -> Markers.WriteFlag("BeforeBackgroundFileCheck {0}", file))
+//     checkerInstance.FileChecked.Add (fun file -> Markers.WriteFlag("FileChecked {0}", file))
+//     checkerInstance.FileParsed.Add (fun file -> Markers.WriteFlag("FileParsed {0}", file))
+//     checkerInstance.ProjectChecked.Add (fun p -> Markers.WriteFlag("ProjectChecked {0}", p))
 
   let checkerAsync (f: FSharpChecker -> Async<'a>) = 
     let ctx = System.Threading.SynchronizationContext.Current
@@ -220,11 +220,11 @@ type LanguageService (?fileSystem: IFileSystem) =
                    
                    debug "[LanguageService] Change state for %s to `BeingChecked`" filePath
                    debug "[LanguageService] Parse and typecheck source..."
-                   let m = Markers.EnterSpan "LS - P&C"
+                   //let m = Markers.EnterSpan "LS - P&C"
                    let! results = 
                        x.ParseAndCheckFileInProject(
                            fixedFilePath, 0, source, options, IsResultObsolete (fun _ -> isResultObsolete filePath), null) 
-                   m.Leave()
+                   //m.Leave()
                    return results
               finally 
                    if files.TryUpdate (filePath, Checked, BeingChecked) then

@@ -10,7 +10,7 @@ open FSharpVSPowerTools
 open FSharpVSPowerTools.AsyncMaybe
 open FSharpVSPowerTools.ProjectSystem
 open Microsoft.FSharp.Compiler.SourceCodeServices
-open Microsoft.ConcurrencyVisualizer.Instrumentation
+//open Microsoft.ConcurrencyVisualizer.Instrumentation
 
 // Reference at http://social.msdn.microsoft.com/Forums/vstudio/en-US/8e0f71f6-4794-4f0e-9a63-a8b55bc22e00/predefined-textmarkertag?forum=vsx
 
@@ -44,7 +44,7 @@ type HighlightUsageTagger(textDocument: ITextDocument,
                 tagsChanged.Trigger(self, SnapshotSpanEventArgs(span)))
 
     let symbolUsesToSpans (word: SnapshotSpan) fileName (lastIdent: string) (symbolUses: FSharpSymbolUse []) =
-        use m = Markers.EnterSpan "symbolUsesToSpans"
+       // use m = Markers.EnterSpan "symbolUsesToSpans"
         let filePath = Path.GetFullPathSafe(fileName)
         symbolUses
         |> Seq.choose (fun symbolUse -> 
@@ -59,14 +59,14 @@ type HighlightUsageTagger(textDocument: ITextDocument,
         async {
             if currentRequest = requestedPoint then
                 try
-                    let m = Markers.EnterSpan "GetFSharpSymbolUse"
+                    //let m = Markers.EnterSpan "GetFSharpSymbolUse"
                     let! res = vsLanguageService.GetFSharpSymbolUse (newWord, symbol, fileName, projectProvider, AllowStaleResults.No)
-                    m.Leave()
+                    //m.Leave()
                     match res with
                     | Some (_, checkResults) ->
-                        let m = Markers.EnterSpan "FindUsagesInFile"
+                      //  let m = Markers.EnterSpan "FindUsagesInFile"
                         let! results = vsLanguageService.FindUsagesInFile (newWord, symbol, checkResults)
-                        m.Leave()
+                        //m.Leave()
                         let refSpans =
                             results |> Option.map (fun (_, lastIdent, refs) -> symbolUsesToSpans newWord fileName lastIdent refs)
 
@@ -122,7 +122,7 @@ type HighlightUsageTagger(textDocument: ITextDocument,
     let tagSpan span = TagSpan<HighlightUsageTag>(span, HighlightUsageTag()) :> ITagSpan<_>
 
     let getTags (spans: NormalizedSnapshotSpanCollection): ITagSpan<HighlightUsageTag> list = 
-        use m = Markers.EnterSpan "getTags"
+        //use m = Markers.EnterSpan "getTags"
         [
             match currentWord with
             | Some word when spans.Count <> 0 && wordSpans.Count <> 0 -> 
