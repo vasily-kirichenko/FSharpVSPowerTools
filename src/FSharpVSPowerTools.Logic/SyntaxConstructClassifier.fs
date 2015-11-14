@@ -453,6 +453,17 @@ type SyntaxConstructClassifier
 
                 pf.Stop()
                 Logging.logInfo (fun _ -> sprintf "[SyntaxConstructClassifier] [Fast stage] %s" pf.Result)
+                Logging.logInfo (fun _ -> 
+                    sprintf "[SyntaxConstructClassifier] FCS caches:\n%+A" 
+                            (vsLanguageService.GetCachesState()
+                             |> List.mapi (fun i (cacheName, state) -> 
+                                    sprintf "%d) %s (%d items)\n%+A" (i + 1) cacheName state.Length
+                                            (state 
+                                             |> List.mapi (fun j (file: string, _state) -> 
+                                                  sprintf "%d.%d) %s" (i + 1) (j + 1) 
+                                                          (if file.Length > 100 then file.Substring(0, 100) else file))
+                                             |> List.toArray 
+                                             |> String.concat "\n"))))
             } |> Async.Ignore
         else async.Return ()
 

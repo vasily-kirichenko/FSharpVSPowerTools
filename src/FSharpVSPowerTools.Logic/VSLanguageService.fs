@@ -335,3 +335,5 @@ type VSLanguageService
     member internal __.SkipLexCache 
         with get () = skipLexCache
         and set v = skipLexCache <- v
+
+    member internal __.GetCachesState() = instance.GetCachesState()

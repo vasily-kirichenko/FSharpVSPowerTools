@@ -242,8 +242,11 @@ type LanguageService (?backgroundCompilation: bool, ?projectCacheSize: int, ?fil
                   debug "[LanguageService] Type checking fails for '%s' with content=%A and %A.\nResulting exception: %A" fixedFilePath source options e
                   handleCriticalErrors e fixedFilePath source options
                   ParseAndCheckResults.Empty
+        
           return results
       }
+
+  member __.GetCachesState() = checkerInstance.GetCachesState()
 
   member __.OnFileChanged filePath = 
     files.AddOrUpdate (filePath, NeedChecking, (fun _ oldState -> 
