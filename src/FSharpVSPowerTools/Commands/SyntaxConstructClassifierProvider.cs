@@ -93,6 +93,11 @@ namespace FSharpVSPowerTools
 
         private VisualStudioTheme lastTheme = VisualStudioTheme.Unknown;
 
+        static readonly FontColor DefaultDarkFontColor = 
+            new FontColor(Color.FromRgb(220, 220, 220), Color.FromRgb(30, 30, 30));
+
+        static readonly FontColor DefaultLightFontColor = new FontColor(Colors.Black, Colors.White);
+
         public ClassificationColorManager()
         {
             // Light/Blue theme colors
@@ -143,31 +148,31 @@ namespace FSharpVSPowerTools
         [Import]
         private IClassificationTypeRegistryService classificationTypeRegistry = null;
 
+        static FontColor GetDefaultFontColor(VisualStudioTheme theme)
+        {
+            return theme == VisualStudioTheme.Dark ? DefaultDarkFontColor : DefaultLightFontColor;
+        }
+
         public FontColor GetDefaultColors(string category) 
         {
             var currentTheme = themeManager.GetCurrentTheme();
-
-            bool success;
-            FontColor color;
-            switch (currentTheme)
-            {
-                case VisualStudioTheme.Dark:
-                    color = new FontColor(Color.FromRgb(220, 220, 220), Color.FromRgb(30, 30, 30));
-                    success = themeColors[currentTheme].TryGetValue(category, out color);
-                    if (!success)
-                        LoggingModule.logWarningMessage(() => String.Format("Theme manager can't read colors correctly from {0} theme.", currentTheme));
-                    return color;
-
-                case VisualStudioTheme.Light:
-                case VisualStudioTheme.Blue:
-                default:
-                    color = new FontColor(Colors.Black, Colors.White);
-                    success = themeColors[currentTheme].TryGetValue(category, out color);
-                    if (!success)
-                        LoggingModule.logWarningMessage(() => String.Format("Theme manager can't read colors correctly from {0} theme.", currentTheme));
-                    return color;
-            }
+            var color = GetDefaultFontColor(currentTheme);
+            if (!themeColors[currentTheme].TryGetValue(category, out color))
+                LoggingModule.logWarningMessage(() => 
+                    string.Format("Theme manager can't read colors correctly from {0} theme.", currentTheme));
+            return color;
         }
+
+        static SolidColorBrush ColorToBrush(Color? color)
+        {
+            return color == null ? null : new SolidColorBrush(color.Value);
+        }
+
+        static Color? GetBrushColor(Brush brush)
+        {
+            var solidBrush = brush as SolidColorBrush;
+            return solidBrush == null ? (Color?) null : solidBrush.Color;
+        } 
 
         public void UpdateColors()
         {
@@ -176,7 +181,7 @@ namespace FSharpVSPowerTools
             if (currentTheme != VisualStudioTheme.Unknown && currentTheme != lastTheme)
             {
                 lastTheme = currentTheme;
-
+                var defaultColor = GetDefaultFontColor(currentTheme);
                 var colors = themeColors[currentTheme];
                 var formatMap = classificationFormatMapService.GetClassificationFormatMap(category: "text");
                     
@@ -192,14 +197,10 @@ namespace FSharpVSPowerTools
                         var oldProp = formatMap.GetTextProperties(classificationType);
 
                         var foregroundBrush = 
-                            color.Foreground == null 
-                                ? null
-                                : new SolidColorBrush(color.Foreground.Value);
+                            GetNewBrush(oldProp.ForegroundBrush, color.Foreground, defaultColor.Foreground);
 
                         var backgroundBrush = 
-                            color.Background == null 
-                                ? null
-                                : new SolidColorBrush(color.Background.Value);
+                            GetNewBrush(oldProp.BackgroundBrush, color.Background, defaultColor.Background); 
 
                         var newProp = TextFormattingRunProperties.CreateTextFormattingRunProperties(
                             foregroundBrush, backgroundBrush, oldProp.Typeface, null, null, oldProp.TextDecorations, 
@@ -213,6 +214,13 @@ namespace FSharpVSPowerTools
                     formatMap.EndBatchUpdate();
                 }
             }
+        }
+
+        SolidColorBrush GetNewBrush(Brush oldBrush, Color? defaultColor, Color? defaultThemeColor)
+        {
+            var oldColor = GetBrushColor(oldBrush);
+            var newColor = oldColor != defaultThemeColor ? oldColor : defaultColor;
+            return ColorToBrush(newColor);
         }
     }
 
