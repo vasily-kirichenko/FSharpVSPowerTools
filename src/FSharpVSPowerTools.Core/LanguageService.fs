@@ -495,7 +495,7 @@ type LanguageService (?backgroundCompilation: bool, ?projectCacheSize: int, ?fil
                     FullNames = fullNames })
           return allSymbolsUses }
 
-    /// Get all the uses in the project of a symbol in the given file (using 'source' as the source for the file)
+    /// Get all the uses in the project of a symbol in the given file.
     member __.IsSymbolUsedInProjects(symbol: FSharpSymbol, currentProjectName: string, projectsOptions: FSharpProjectOptions seq) =
         projectsOptions
         |> Seq.toArray
@@ -530,10 +530,8 @@ type LanguageService (?backgroundCompilation: bool, ?projectCacheSize: int, ?fil
                 | _ ->
                     symbolsUses
                     |> Array.map (fun su -> 
-                        { su with IsUsed = 
-                                    notUsedSymbols 
-                                    |> Array.forall (fun s -> 
-                                        not (s.IsEffectivelySameAs su.SymbolUse.Symbol)) })
+                        let isUsed = notUsedSymbols |> Array.forall (fun s -> not (s.IsEffectivelySameAs su.SymbolUse.Symbol))
+                        if su.IsUsed <> isUsed then { su with IsUsed = isUsed } else su)
         }
 
     member x.GetAllEntitiesInProjectAndReferencedAssemblies (projectOptions: FSharpProjectOptions, fileName, source, ?withCache) =

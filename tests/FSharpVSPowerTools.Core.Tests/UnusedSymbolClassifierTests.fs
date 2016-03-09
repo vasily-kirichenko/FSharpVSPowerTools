@@ -11,6 +11,9 @@ let framework = FSharpCompilerVersion.FSharp_3_1
 let languageService = LanguageService()
 
 type private Cat = Category
+type private Line = int
+type private StartCol = int
+type private EndCol = int
 
 let opts source = 
     let opts = 
@@ -18,14 +21,13 @@ let opts source =
         |> Async.RunSynchronously
     { opts with LoadTime = System.DateTime.UtcNow }
 
-let (=>) source (expected: (int * ((Cat * int * int) list)) list) = 
+let (=>) source (expected: (Line * ((Category * StartCol * EndCol) list)) list) = 
     let opts = opts source
-    
     let sourceLines = String.getLines source
 
     let lexer = 
         { new LexerBase() with
-            member __.GetSymbolFromTokensAtLocation (_tokens, line, col) =
+            member __.GetSymbolFromTokensAtLocation (_, line, col) =
                 let lineStr = sourceLines.[line]
                 Lexer.getSymbol source line col lineStr SymbolLookupKind.ByRightColumn LanguageServiceTestHelper.args Lexer.queryLexState
             member __.TokenizeLine line =
@@ -33,45 +35,38 @@ let (=>) source (expected: (int * ((Cat * int * int) list)) list) =
                 Lexer.tokenizeLine source LanguageServiceTestHelper.args line lineStr Lexer.queryLexState 
             member __.LineCount = sourceLines.Length }
 
-    let symbolsUses = 
+    let actualCategories, ast =
         async {
-            let! symbolUses = 
-                languageService.GetAllUsesOfAllSymbolsInFile (opts, fileName, source, AllowStaleResults.No, true)
-            return! languageService.GetUnusedDeclarations (symbolUses, opts, (fun _ -> async { return Some [opts] }))
-        } |> Async.RunSynchronously
+            let! symbolsUses = languageService.GetAllUsesOfAllSymbolsInFile (opts, fileName, source, AllowStaleResults.No, true)
+            let! symbolsUses = languageService.GetUnusedDeclarations (symbolsUses, opts, (fun _ -> async { return Some [opts] }))
+            let! checkResults = languageService.ParseAndCheckFileInProject(opts, fileName, source, AllowStaleResults.No)
+            let! entities = languageService.GetAllEntitiesInProjectAndReferencedAssemblies (opts, fileName, source)
+            let getLineStr line = sourceLines.[line - 1]
+        
+            let qualifyOpenDeclarations line endCol idents = 
+                async {
+                    let! tooltip = languageService.GetIdentTooltip (line, endCol, getLineStr line, Array.toList idents, opts, fileName, source)
+                    return 
+                        match tooltip with
+                        | Some tooltip -> OpenDeclarationGetter.parseTooltip tooltip
+                        | None -> []
+                }
+ 
+            let! openDeclarations = OpenDeclarationGetter.getOpenDeclarations checkResults.ParseTree entities qualifyOpenDeclarations
 
-    let checkResults = 
-        languageService.ParseAndCheckFileInProject(opts, fileName, source, AllowStaleResults.No) |> Async.RunSynchronously
+            let allEntities =
+                entities
+                |> Option.map (fun entities -> 
+                    entities 
+                    |> Seq.groupBy (fun e -> e.FullName)
+                    |> Seq.map (fun (key, es) -> key, es |> Seq.map (fun e -> e.CleanedIdents) |> Seq.toList)
+                    |> Dict.ofSeq)
 
-    let actualCategories =
-        let entities =
-            languageService.GetAllEntitiesInProjectAndReferencedAssemblies (opts, fileName, source)
-            |> Async.RunSynchronously
-
-        let getLineStr line = sourceLines.[line - 1]
-
-        let qualifyOpenDeclarations line endColumn idents = async {
-            let! tooltip = languageService.GetIdentTooltip (line, endColumn, getLineStr line, Array.toList idents, opts, fileName, source)
             return 
-                match tooltip with
-                | Some tooltip -> OpenDeclarationGetter.parseTooltip tooltip
-                | None -> []
-        }
-
-        let openDeclarations = 
-            OpenDeclarationGetter.getOpenDeclarations checkResults.ParseTree entities qualifyOpenDeclarations
-            |> Async.RunSynchronously
-
-        let allEntities =
-            entities
-            |> Option.map (fun entities -> 
-                entities 
-                |> Seq.groupBy (fun e -> e.FullName)
-                |> Seq.map (fun (key, es) -> key, es |> Seq.map (fun e -> e.CleanedIdents) |> Seq.toList)
-                |> Dict.ofSeq)
-
-        SourceCodeClassifier.getCategorizedSpansForUnusedSymbols (symbolsUses, checkResults, lexer, openDeclarations, allEntities)
-        |> Seq.groupBy (fun span -> span.WordSpan.Line)
+                SourceCodeClassifier.getCategorizedSpansForUnusedSymbols (symbolsUses, checkResults, lexer, openDeclarations, allEntities)
+                |> Seq.groupBy (fun span -> span.WordSpan.Line),
+                checkResults.ParseTree
+        } |> Async.RunSynchronously
 
     let actual =
         expected
@@ -87,16 +82,16 @@ let (=>) source (expected: (int * ((Cat * int * int) list)) list) =
                 |> Seq.sortBy (fun (_, startCol, _) -> startCol)
                 |> Seq.toList
             | None -> line, [])
-        |> List.sortBy (fun (line, _) -> line)
+        |> List.sortBy fst
     
     let expected = 
         expected 
         |> List.map (fun (line, spans) -> line, spans |> List.sortBy (fun (_, startCol, _) -> startCol))
-        |> List.sortBy (fun (line, _) -> line)
+        |> List.sortBy fst
     
     try actual |> Collection.assertEquiv expected
     with _ -> 
-        debug "AST: %A" checkResults.ParseTree
+        debug "AST: %A" ast
         for x in actual do
             debug "Actual: %A" x
         reraise()
