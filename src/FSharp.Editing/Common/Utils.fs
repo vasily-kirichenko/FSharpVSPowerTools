@@ -11,11 +11,12 @@ type FilePath = string
 type Point<[<Measure>]'t> = { Line : int; Column : int }
 type Range<[<Measure>]'t> = { Start : Point<'t>; End: Point<'t> }
 
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Point =
-    let make line column : Point<'t> = { Line = line; Column = column }
+    let make line column : Point<'a> = { Line = line; Column = column }
+    let toFSharpPos (p: Point<'a>) = Microsoft.FSharp.Compiler.Range.mkPos p.Line p.Column
 
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Range =
     let make startLine startColumn endLine endColumn : Range<'t> =
         { Start = Point.make startLine startColumn

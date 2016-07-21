@@ -49,33 +49,31 @@ and ResolveUnopenedNamespaceSuggestedActionsSource (resolver: UnopenedNamespaceR
     interface ISuggestedActionsSource with
         member __.Dispose() = (resolver :> IDisposable).Dispose()
         member __.GetSuggestedActions (_requestedActionCategories, _range, _ct) =
-            match resolver.CurrentWord, resolver.Suggestions with
-            | None, _
-            | _, [] ->
-                Seq.empty
-            | Some _, suggestions ->
-                suggestions
-                |> List.map (fun xs ->
-                    xs
-                    |> List.map (fun s ->
-                         { new ISuggestedAction with
-                               member __.DisplayText = s.Text
-                               member __.Dispose() = ()
-                               member __.GetActionSetsAsync _ct = Task.FromResult <| seq []
-                               member __.GetPreviewAsync _ct = Task.FromResult null
-                               member __.HasActionSets = false
-                               member __.HasPreview = false
-                               member __.IconAutomationText = null
-                               member __.IconMoniker =
-                                   if s.NeedsIcon then ImageMoniker(Guid=Guid "{ae27a6b0-e345-4288-96df-5eaf394ee369}", Id=90)
-                                   else Unchecked.defaultof<_>
-                               member __.InputGestureText = null
-                               member __.Invoke _ct = s.Invoke()
-                               member __.TryGetTelemetryId _telemetryId = false })
-                     |> fun xs -> SuggestedActionSet xs) :> _
+            match resolver.Suggestions with
+            | [] -> Seq.empty
+            | suggestions ->
+                seq { for span, groups in suggestions do
+                        let actions =
+                            [ for group in groups do
+                                for s in group do
+                                   yield { new ISuggestedAction with
+                                             member __.DisplayText = s.Text
+                                             member __.Dispose() = ()
+                                             member __.GetActionSetsAsync _ct = Task.FromResult <| seq []
+                                             member __.GetPreviewAsync _ct = Task.FromResult null
+                                             member __.HasActionSets = false
+                                             member __.HasPreview = false
+                                             member __.IconAutomationText = null
+                                             member __.IconMoniker =
+                                                 if s.NeedsIcon then ImageMoniker(Guid=Guid "{ae27a6b0-e345-4288-96df-5eaf394ee369}", Id=90)
+                                                 else Unchecked.defaultof<_>
+                                             member __.InputGestureText = null
+                                             member __.Invoke _ct = s.Invoke()
+                                             member __.TryGetTelemetryId _telemetryId = false } ]
+                        yield SuggestedActionSet(actions, applicableToSpan = Nullable span.Span) }
 
         member __.HasSuggestedActionsAsync (_requestedCategories, _range, _ct) =
-            Task.FromResult (Option.isSome resolver.CurrentWord && resolver.Suggestions |> List.isEmpty |> not)
+            Task.FromResult (resolver.Suggestions |> List.isEmpty |> not)
 
         [<CLIEvent>]
         member __.SuggestedActionsChanged: IEvent<EventHandler<EventArgs>, EventArgs> = actionsChanged.Publish

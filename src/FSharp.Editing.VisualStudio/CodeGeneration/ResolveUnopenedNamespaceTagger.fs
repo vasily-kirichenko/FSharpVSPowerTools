@@ -1,5 +1,6 @@
 ﻿namespace FSharp.Editing.VisualStudio.CodeGeneration
 
+open Microsoft.FSharp.Compiler
 open Microsoft.VisualStudio.Text
 open Microsoft.VisualStudio.Text.Editor
 open Microsoft.VisualStudio.Text.Tagging
@@ -8,7 +9,6 @@ open Microsoft.VisualStudio.Language.Intellisense
 open System
 open FSharp.Editing
 open FSharp.Editing.VisualStudio
-open Microsoft.FSharp.Compiler
 open FSharp.Editing.VisualStudio.ProjectSystem
 open FSharp.Editing.Features
 open FSharp.Editing.AsyncMaybe
@@ -17,18 +17,17 @@ type ResolveUnopenedNamespaceSmartTag(actionSets) =
     inherit SmartTag(SmartTagType.Factoid, actionSets)
 
 type UnopenedNamespaceResolver
-         (doc: ITextDocument,
-          view: ITextView, 
-          textUndoHistory: ITextUndoHistory,
-          vsLanguageService: VSLanguageService, 
-          projectFactory: ProjectFactory) as self =
+    (
+        doc: ITextDocument,
+        view: ITextView, 
+        textUndoHistory: ITextUndoHistory,
+        vsLanguageService: VSLanguageService, 
+        projectFactory: ProjectFactory
+    ) as self =
     
     let buffer = view.TextBuffer
-    let codeGenService: ICodeGenerationService<_, _, _> = upcast CodeGenerationService(vsLanguageService, buffer)
-
     let changed = Event<_>()
-    let mutable currentWord: SnapshotSpan option = None
-    let mutable suggestions: SuggestionGroup list = [] 
+    let mutable suggestions: (SnapshotSpan * SuggestionGroup list) list = [] 
     
     let openNamespace (snapshotSpan: SnapshotSpan) (ctx: InsertContext) ns name = 
         use transaction = textUndoHistory.CreateTransaction(Resource.recordGenerationCommandName)
@@ -40,8 +39,8 @@ type UnopenedNamespaceResolver
         let doc =
             { new IInsertContextDocument<ITextSnapshot> with
                   member __.Insert (snapshot, line, lineStr) = 
-                    let pos = snapshot.GetLineFromLineNumber(line).Start.Position
-                    snapshot.TextBuffer.Insert (pos, lineStr + Environment.NewLine)
+                      let pos = snapshot.GetLineFromLineNumber(line).Start.Position
+                      snapshot.TextBuffer.Insert (pos, lineStr + Environment.NewLine)
                   member __.GetLineStr (snapshot, line) = snapshot.GetLineFromLineNumber(line).GetText() }
         
         InsertContext.insertOpenDeclaration snapshot doc ctx ns |> ignore
@@ -104,92 +103,84 @@ type UnopenedNamespaceResolver
 
     let updateAtCaretPosition (CallInUIContext callInUIContext) =
         async {
-            match buffer.GetSnapshotPoint view.Caret.Position, currentWord with
-            | Some point, Some word when word.Snapshot = view.TextSnapshot && point.InSpan word -> return ()
-            | _ ->
-                let! result = asyncMaybe {
-                    let! point = buffer.GetSnapshotPoint view.Caret.Position
-                    let! project = project()
-                    let newWordAndSym = vsLanguageService.GetSymbol (point, doc.FilePath, project)
-                    let newWord = newWordAndSym |> Option.map fst
-                    let oldWord = currentWord
-                    currentWord <- newWord
-                    let! newWord = newWord
-                    let! sym = newWordAndSym |> Option.map snd
-                    
-                    do! match oldWord, currentWord with
-                        | _, None -> None 
-                        | None, _ ->  Some()
-                        | Some oldWord, Some newWord -> 
-                            if oldWord <> newWord then Some()
-                            else None
-                    
-                    let! res = vsLanguageService.GetFSharpSymbolUse(newWord, sym, doc.FilePath, project, AllowStaleResults.No) |> liftAsync
-                    
-                    match res with
-                    | Some _ -> return! None
-                    | None ->
-                        let! checkResults = vsLanguageService.ParseFileInProject (doc.FilePath, project)
-                        let pos = codeGenService.ExtractFSharpPos point
-                        let! parseTree = checkResults.ParseTree
-                        let! entityKind = ParsedInput.getEntityKind parseTree pos
-                        let! entities = vsLanguageService.GetAllEntities (doc.FilePath, project)
+            let! result = asyncMaybe {
+                let! point = buffer.GetSnapshotPoint view.Caret.Position
+                let! project = project()
+                let! checkResults = vsLanguageService.ParseAndCheckFileInProject(doc.FilePath, project)
 
-                        //entities |> Seq.map string |> fun es -> System.IO.File.WriteAllLines (@"l:\entities.txt", es)
-
-                        let isAttribute = entityKind = EntityKind.Attribute
-                        let entities =
-                            entities |> List.filter (fun e ->
-                                match entityKind, e.Kind with
-                                | EntityKind.Attribute, EntityKind.Attribute 
-                                | EntityKind.Type, (EntityKind.Type | EntityKind.Attribute)
-                                | EntityKind.FunctionOrValue _, _ -> true 
-                                | EntityKind.Attribute, _
-                                | _, EntityKind.Module _
-                                | EntityKind.Module _, _
-                                | EntityKind.Type, _ -> false)
-
-                        let entities = 
-                            entities
-                            |> List.map (fun e -> 
-                                 [ yield e.TopRequireQualifiedAccessParent, e.AutoOpenParent, e.Namespace, e.CleanedIdents
-                                   if isAttribute then
-                                       let lastIdent = e.CleanedIdents.[e.CleanedIdents.Length - 1]
-                                       if e.Kind = EntityKind.Attribute && lastIdent.EndsWith "Attribute" then
-                                           yield 
-                                               e.TopRequireQualifiedAccessParent, 
-                                               e.AutoOpenParent,
-                                               e.Namespace,
-                                               e.CleanedIdents 
-                                               |> Array.replace (e.CleanedIdents.Length - 1) (lastIdent.Substring(0, lastIdent.Length - 9)) ])
-                            |> List.concat
-
-                        debug "[ResolveUnopenedNamespaceSmartTagger] %d entities found" (List.length entities)
-                        
-                        let! idents = UntypedAstUtils.getLongIdentAt parseTree (Range.mkPos pos.Line sym.RightColumn)
-                        let createEntity = ParsedInput.tryFindInsertionContext pos.Line parseTree idents
-                        return entities |> Seq.map createEntity |> Seq.concat |> Seq.toList |> getSuggestions newWord 
-                } 
-                suggestions <- result |> Option.getOrElse []
-                do! callInUIContext <| fun _ -> changed.Trigger self
+                match checkResults.Errors with
+                | [||] -> return! None
+                | errors ->
+                    Logging.logError <| fun _ -> sprintf "Parse errors: %+A" errors
+                    let! parseTree = checkResults.ParseTree
+                    let! entities = vsLanguageService.GetAllEntities (doc.FilePath, project)
+                    let currentLine = point.Line + 1
+                    return!
+                        errors
+                        |> Array.filter (fun e -> e.StartLineAlternate = currentLine && e.EndLineAlternate = currentLine)
+                        |> Async.Array.map (fun e ->
+                            asyncMaybe {
+                                let line = e.StartLineAlternate - 1
+                                let range = Range.make line e.StartColumn line e.EndColumn
+                                let word = SnapshotSpan.MakeFromRange point.Snapshot range
+                                let! entityKind = ParsedInput.getEntityKind parseTree (Range.mkPos e.StartLineAlternate e.StartColumn)
+                                                                    
+                                //entities |> Seq.map string |> fun es -> System.IO.File.WriteAllLines (@"l:\entities.txt", es)
+                                
+                                let isAttribute = entityKind = EntityKind.Attribute
+                                let entities =
+                                    entities |> List.filter (fun e ->
+                                        match entityKind, e.Kind with
+                                        | EntityKind.Attribute, EntityKind.Attribute 
+                                        | EntityKind.Type, (EntityKind.Type | EntityKind.Attribute)
+                                        | EntityKind.FunctionOrValue _, _ -> true 
+                                        | EntityKind.Attribute, _
+                                        | _, EntityKind.Module _
+                                        | EntityKind.Module _, _
+                                        | EntityKind.Type, _ -> false)
+                                
+                                let entities = 
+                                    [ for e in entities do
+                                         yield e.TopRequireQualifiedAccessParent, e.AutoOpenParent, e.Namespace, e.CleanedIdents
+                                
+                                         if isAttribute then
+                                             let lastIdent = e.CleanedIdents.[e.CleanedIdents.Length - 1]
+                                             if e.Kind = EntityKind.Attribute && lastIdent.EndsWith "Attribute" then
+                                                 yield 
+                                                     e.TopRequireQualifiedAccessParent, 
+                                                     e.AutoOpenParent,
+                                                     e.Namespace,
+                                                     e.CleanedIdents 
+                                                     |> Array.replace (e.CleanedIdents.Length - 1) (lastIdent.Substring(0, lastIdent.Length - 9)) ]
+                                
+                                debug "[ResolveUnopenedNamespaceSmartTagger] %d entities found" entities.Length
+                                
+                                let! idents = UntypedAstUtils.getLongIdentAt parseTree (Range.mkPos line range.End.Column)
+                                let createEntity = ParsedInput.tryFindInsertionContext range.Start.Line parseTree idents
+                                return word, entities |> Seq.collect createEntity |> Seq.toList |> getSuggestions word 
+                            })
+                        |> Async.map (Array.choose id >> Array.toList)
+                        |> liftAsync
+            } 
+            suggestions <- result |> Option.getOrElse []
+            do! callInUIContext <| fun _ -> changed.Trigger self
         }
 
-    let docEventListener = new DocumentEventListener ([ViewChange.layoutEvent view; ViewChange.caretEvent view], 
-                                                      100us, updateAtCaretPosition)
+    let docEventListener = new DocumentEventListener ([ViewChange.layoutEvent view; ViewChange.caretEvent view], 100us, updateAtCaretPosition)
 
     member __.Updated = changed.Publish
-    member __.CurrentWord = 
-        currentWord |> Option.map (fun word ->
-            if buffer.CurrentSnapshot = word.Snapshot then word
-            else word.TranslateTo(buffer.CurrentSnapshot, SpanTrackingMode.EdgeExclusive))
     member __.Suggestions = suggestions
 
     interface IDisposable with
-        member __.Dispose() = 
-            (docEventListener :> IDisposable).Dispose()
+        member __.Dispose() = dispose docEventListener
 
-type ResolveUnopenedNamespaceSmartTagger(buffer: ITextBuffer, serviceProvider: IServiceProvider, 
-                                         resolver: UnopenedNamespaceResolver) as self =
+type ResolveUnopenedNamespaceSmartTagger
+    (
+        buffer: ITextBuffer, 
+        serviceProvider: IServiceProvider, 
+        resolver: UnopenedNamespaceResolver
+    ) as self =
+    
     let tagsChanged = Event<_, _>()
     let openNamespaceIcon = ResourceProvider.getRefactoringIcon serviceProvider RefactoringIconKind.AddUsing
     do resolver.Updated.Add (fun _ -> buffer.TriggerTagsChanged self tagsChanged)
@@ -198,26 +189,26 @@ type ResolveUnopenedNamespaceSmartTagger(buffer: ITextBuffer, serviceProvider: I
         member __.GetTags _ =
             protectOrDefault (fun _ ->
                 seq {
-                    match resolver.CurrentWord, resolver.Suggestions with
-                    | None, _ 
-                    | _, [] -> ()
-                    | Some word, suggestions ->
-                        let actions =
-                            suggestions
-                            |> List.map (fun xs ->
-                                xs 
-                                |> List.map (fun s ->
-                                    { new ISmartTagAction with
-                                        member __.ActionSets = null
-                                        member __.DisplayText = s.Text
-                                        member __.Icon = if s.NeedsIcon then openNamespaceIcon else null
-                                        member __.IsEnabled = true
-                                        member __.Invoke() = s.Invoke() })
+                    match resolver.Suggestions with
+                    | [] -> ()
+                    | suggestions ->
+                        for span, suggestions in suggestions do
+                            let actions =
+                                suggestions
+                                |> List.map (fun xs ->
+                                    xs 
+                                    |> List.map (fun suggestion ->
+                                        { new ISmartTagAction with
+                                            member __.ActionSets = null
+                                            member __.DisplayText = suggestion.Text
+                                            member __.Icon = if suggestion.NeedsIcon then openNamespaceIcon else null
+                                            member __.IsEnabled = true
+                                            member __.Invoke() = suggestion.Invoke() })
+                                    |> Seq.toReadOnlyCollection
+                                    |> fun xs -> SmartTagActionSet xs)
                                 |> Seq.toReadOnlyCollection
-                                |> fun xs -> SmartTagActionSet xs)
-                            |> Seq.toReadOnlyCollection
-
-                        yield TagSpan<_>(word, ResolveUnopenedNamespaceSmartTag actions) :> _
+                            
+                            yield TagSpan<_>(span, ResolveUnopenedNamespaceSmartTag actions) :> ITagSpan<_>
                 })
                 Seq.empty
              

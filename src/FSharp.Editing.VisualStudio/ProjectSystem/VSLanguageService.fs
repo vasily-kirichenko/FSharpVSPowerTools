@@ -91,9 +91,7 @@ type VSLanguageService
         maybe {
             let! source = openDocumentsTracker.TryGetDocumentText fileName
             let args = projectProvider.CompilerOptions
-
             let queryLexState = buildQueryLexState point.Snapshot.TextBuffer
-
             let! symbol = Lexer.getSymbol source point.Line point.Column point.LineText kind args queryLexState
             return SnapshotSpan.MakeFromRange point.Snapshot symbol.Range, symbol
         }
