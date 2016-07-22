@@ -1,6 +1,5 @@
 ﻿namespace FSharp.Editing.VisualStudio.CodeGeneration
 
-open Microsoft.FSharp.Compiler
 open Microsoft.VisualStudio.Text
 open Microsoft.VisualStudio.Text.Editor
 open Microsoft.VisualStudio.Text.Tagging
@@ -120,10 +119,10 @@ type UnopenedNamespaceResolver
                         |> Array.filter (fun e -> e.StartLineAlternate = currentLine && e.EndLineAlternate = currentLine)
                         |> Async.Array.map (fun e ->
                             asyncMaybe {
-                                let line = e.StartLineAlternate - 1
-                                let range = Range.make line e.StartColumn line e.EndColumn
-                                let word = SnapshotSpan.MakeFromRange point.Snapshot range
-                                let! entityKind = ParsedInput.getEntityKind parseTree (Range.mkPos e.StartLineAlternate e.StartColumn)
+                                let fcsRange = Range.make e.StartLineAlternate e.StartColumn e.StartLineAlternate e.EndColumn
+                                let vsRange = Range.make (e.StartLineAlternate - 1) e.StartColumn (e.StartLineAlternate - 1) e.EndColumn
+                                let word = SnapshotSpan.MakeFromRange point.Snapshot vsRange
+                                let! entityKind = ParsedInput.getEntityKind parseTree (Point.toFSharpPos fcsRange.Start)
                                                                     
                                 //entities |> Seq.map string |> fun es -> System.IO.File.WriteAllLines (@"l:\entities.txt", es)
                                 
@@ -155,8 +154,8 @@ type UnopenedNamespaceResolver
                                 
                                 debug "[ResolveUnopenedNamespaceSmartTagger] %d entities found" entities.Length
                                 
-                                let! idents = UntypedAstUtils.getLongIdentAt parseTree (Range.mkPos line range.End.Column)
-                                let createEntity = ParsedInput.tryFindInsertionContext range.Start.Line parseTree idents
+                                let! idents = UntypedAstUtils.getLongIdentAt parseTree (Point.toFSharpPos fcsRange.End)
+                                let createEntity = ParsedInput.tryFindInsertionContext vsRange.Start.Line parseTree idents
                                 return word, entities |> Seq.collect createEntity |> Seq.toList |> getSuggestions word 
                             })
                         |> Async.map (Array.choose id >> Array.toList)
