@@ -123,6 +123,7 @@ type UnopenedNamespaceResolver
                                 let vsRange = Range.make (e.StartLineAlternate - 1) e.StartColumn (e.StartLineAlternate - 1) e.EndColumn
                                 let word = SnapshotSpan.MakeFromRange point.Snapshot vsRange
                                 let! entityKind = ParsedInput.getEntityKind parseTree (Point.toFSharpPos fcsRange.Start)
+                                //let newWordAndSym = vsLanguageService.GetSymbol (point, doc.FilePath, project)
                                                                     
                                 //entities |> Seq.map string |> fun es -> System.IO.File.WriteAllLines (@"l:\entities.txt", es)
                                 
