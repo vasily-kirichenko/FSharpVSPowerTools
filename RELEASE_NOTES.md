@@ -1,3 +1,6 @@
+#### 2.5.6 - October 26 2016
+* Revert 2.5.5
+
 #### 2.5.4 - October 25 2016
 * Update F# Compiler Service, Fantomas and FSharpLint
 
