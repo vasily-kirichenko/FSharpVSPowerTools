@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="FSharpVSPowerTools.68b42cfe-c752-4094-8dba-ed48aa81cac8" Version="2.5.5" Language="en-US" Publisher="fsharp.org" />
+    <Identity Id="FSharpVSPowerTools.68b42cfe-c752-4094-8dba-ed48aa81cac8" Version="2.6.0" Language="en-US" Publisher="fsharp.org" />
     <DisplayName>Visual F# Power Tools</DisplayName>
     <Description xml:space="preserve">A collection of additional commands for F# in Visual Studio</Description>
     <MoreInfo>https://github.com/fsprojects/VisualFSharpPowerTools</MoreInfo>
@@ -12,9 +12,8 @@
     <PreviewImage>preview.png</PreviewImage>
     <Tags>fsharp, f#, power tools, editing, formatting, navigation, highlighting, refactoring</Tags>
   </Metadata>
-  <Installation>
-    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[12.0,13.0)" />
-    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[13.0,15.0)" />
+  <Installation InstalledByMsi="true">
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[15.0,16.0)" />
   </Installation>
   <Dependencies>
   </Dependencies>
@@ -25,4 +24,7 @@
     <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="FSharp.Editing.VisualStudio" Path="|FSharp.Editing.VisualStudio|" />
     <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="FSharp.Editing.VisualStudio.v2015" Path="|FSharp.Editing.VisualStudio.v2015|" />
   </Assets>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.FSharp" Version="[15.0.25904.2,16.0)" DisplayName="F# language support" />
+  </Prerequisites>
 </PackageManifest>
